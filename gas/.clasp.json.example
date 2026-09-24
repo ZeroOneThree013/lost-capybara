@@ -1,0 +1,9 @@
+{
+  "scriptId": "在這裡填入你的 Apps Script 專案 ID",
+  "rootDir": ".",
+  "scriptExtensions": [".js"],
+  "htmlExtensions": [".html"],
+  "jsonExtensions": [".json"],
+  "filePushOrder": [],
+  "skipSubdirectories": false
+}
