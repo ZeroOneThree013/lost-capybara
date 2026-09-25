@@ -33,7 +33,8 @@ function jsonOutput_(obj) {
 
 function handleFeedback_(body) {
   if (!body.id || !body.type) throw new Error('缺少 id 或 type');
-  appendFeedback_({ id: body.id, type: body.type });
+  var info = getCache_('place:' + body.id) || {};
+  appendFeedback_({ id: body.id, type: body.type, name: info.name, category: info.cat, kind: info.kind });
   return { ok: true };
 }
 
@@ -41,6 +42,10 @@ function handleSavePrefs_(body) {
   if (!body.prefs || !body.prefs.savedAt || !body.prefs.values) throw new Error('缺少 prefs');
   savePrefs_(body.prefs);
   return { ok: true };
+}
+
+function emptyRecs_() {
+  return { food: [], cloth: [], stay: [], move: [], learn: [], fun: [] };
 }
 
 function handleRecommend_(body) {
@@ -55,22 +60,34 @@ function handleRecommend_(body) {
     limit: 15,
   });
 
-  var recs = {};
-  Object.keys(lists).forEach(function (cat) {
-    recs[cat] = lists[cat].slice(0, 5).map(function (it) {
-      return {
-        id: it.id,
-        name: it.name,
-        kind: it.kind,
-        walk: it.walk,
-        m: it.m,
-        reason: '（階段 3 才會由 AI 產生推薦理由）',
-        basis: [],
-        kapi: '（階段 3 才會有卡皮的話）',
-        uncertain: it.hasOpeningHours ? undefined : '營業時間我沒有把握，出門前再確認一下。',
-      };
-    });
+  var hasAnyCandidate = Object.keys(lists).some(function (cat) { return lists[cat].length > 0; });
+  if (!hasAnyCandidate) {
+    return { weather: weather, recs: emptyRecs_() };
+  }
+
+  var values = (body.prefs && body.prefs.values) || {};
+  var timePart = timePartFromClock_(body.time);
+  var allowedBasisByCat = buildAllowedBasis_(values, timePart, weather);
+  var feedbackSummary = summarizeFeedback_(feedbackMap);
+
+  var userPrompt = buildUserPrompt_({
+    timePart: timePart,
+    clock: body.time,
+    weather: weather,
+    feedbackSummary: feedbackSummary,
+    candidatesByCat: lists,
+    allowedBasisByCat: allowedBasisByCat,
   });
 
+  var raw;
+  try {
+    raw = callGroq_(buildSystemPrompt_(), userPrompt);
+  } catch (err) {
+    appendLog_({ input: userPrompt.slice(0, 2000), output: 'ERROR: ' + err.message });
+    return { weather: weather, recs: emptyRecs_() };
+  }
+
+  var recs = validatePicks_(raw, lists, allowedBasisByCat, SCORE_THRESHOLD_);
+  appendLog_({ input: userPrompt.slice(0, 2000), output: JSON.stringify(recs).slice(0, 2000) });
   return { weather: weather, recs: recs };
 }

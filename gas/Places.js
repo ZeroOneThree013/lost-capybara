@@ -62,6 +62,12 @@ function buildCandidateLists_(candidates, origin, opts) {
   return byCat;
 }
 
+function cachePlaceInfo_(candidates) {
+  candidates.forEach(function (c) {
+    setCache_('place:' + c.id, { name: c.name, kind: c.kind, cat: c.cat }, 30 * 24 * 60 * 60 * 1000);
+  });
+}
+
 function fetchOverpassCandidates_(lat, lng, radius) {
   var key = 'places:' + lat.toFixed(3) + ',' + lng.toFixed(3) + ':' + radius;
   var cached = getCache_(key);
@@ -76,6 +82,7 @@ function fetchOverpassCandidates_(lat, lng, radius) {
   var json = JSON.parse(resp.getContentText());
   var candidates = (json.elements || []).map(elementToCandidate_).filter(Boolean);
   setCache_(key, candidates, 12 * 60 * 60 * 1000);
+  cachePlaceInfo_(candidates);
   return candidates;
 }
 
