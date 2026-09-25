@@ -1,14 +1,20 @@
 const assert = require('assert');
-const { buildUserPrompt_, buildResponseSchema_, summarizeFeedback_ } = require('../gas/Groq.js');
+const {
+  buildUserPrompt_,
+  buildResponseSchema_,
+  summarizeFeedback_,
+  extractGeminiText_,
+} = require('../gas/Gemini.js');
 
 function run() {
   const schema = buildResponseSchema_();
   assert.strictEqual(schema.type, 'object');
-  assert.strictEqual(schema.additionalProperties, false);
   assert.deepStrictEqual(schema.required.sort(), ['cloth', 'food', 'fun', 'learn', 'move', 'stay'].sort());
+  assert.ok(!('additionalProperties' in schema), 'Gemini 的 responseSchema 不支援 additionalProperties');
   const pickItem = schema.properties.food.items;
   assert.deepStrictEqual(pickItem.required.sort(), ['basis', 'id', 'kapi', 'reason', 'score'].sort());
-  assert.strictEqual(pickItem.additionalProperties, false);
+  assert.ok(!('additionalProperties' in pickItem));
+  assert.strictEqual(pickItem.properties.basis.items.type, 'string');
 
   const summary = summarizeFeedback_({
     f1: { kind: '日式', type: 'like' },
@@ -33,10 +39,28 @@ function run() {
   assert.ok(prompt.includes('喜歡過：日式'));
   assert.ok(prompt.includes('山茶花拉麵屋'));
   assert.ok(prompt.includes('【cloth】允許依據：（無）'));
-  assert.ok(!prompt.includes('"m":480'), '候選清單傳給 LLM 時不應包含 m/hasOpeningHours 這種它用不到的欄位');
+  assert.ok(!prompt.includes('"m":480'), '候選清單傳給模型時不應包含 m/hasOpeningHours 這種它用不到的欄位');
   assert.ok(!prompt.includes('hasOpeningHours'));
 
-  console.log('groq.test.js OK');
+  assert.strictEqual(
+    extractGeminiText_({ candidates: [{ content: { parts: [{ text: '{"food":[]}' }] } }] }),
+    '{"food":[]}'
+  );
+  assert.strictEqual(
+    extractGeminiText_({ candidates: [{ content: { parts: [{ text: '想一下…', thought: true }, { text: '{"a":1}' }] } }] }),
+    '{"a":1}',
+    '模型的思考內容不應混進 JSON'
+  );
+  assert.strictEqual(
+    extractGeminiText_({ candidates: [{ content: { parts: [{ text: '{"a"' }, { text: ':1}' }] } }] }),
+    '{"a":1}',
+    '多個文字片段要接起來'
+  );
+  assert.strictEqual(extractGeminiText_({}), '');
+  assert.strictEqual(extractGeminiText_({ candidates: [] }), '');
+  assert.strictEqual(extractGeminiText_({ candidates: [{ content: {} }] }), '');
+
+  console.log('gemini.test.js OK');
 }
 
 run();

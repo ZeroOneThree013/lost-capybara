@@ -52,7 +52,7 @@ function handleRecommend_(body) {
   if (typeof body.lat !== 'number' || typeof body.lng !== 'number') throw new Error('缺少座標');
 
   var weather = fetchWeather_(body.lat, body.lng);
-  var rawCandidates = fetchOverpassCandidates_(body.lat, body.lng, 1500);
+  var rawCandidates = fetchOverpassCandidates_(body.lat, body.lng, 1200);
   var feedbackMap = getFeedbackMap_();
   var lists = buildCandidateLists_(rawCandidates, { lat: body.lat, lng: body.lng }, {
     rain: weather.rain,
@@ -68,15 +68,7 @@ function handleRecommend_(body) {
 
   var hasAnyCandidate = Object.keys(lists).some(function (cat) { return lists[cat].length > 0; });
   if (!hasAnyCandidate) {
-    var listCounts = {};
-    Object.keys(lists).forEach(function (cat) { listCounts[cat] = lists[cat].length; });
-    var rawCatCounts = {};
-    rawCandidates.forEach(function (c) { rawCatCounts[c.cat] = (rawCatCounts[c.cat] || 0) + 1; });
-    return {
-      weather: weather,
-      recs: emptyRecs_(),
-      debug: { rawCandidateCount: rawCandidates.length, rawCatCounts: rawCatCounts, listCounts: listCounts, rainFlag: weather.rain, sampleRaw: rawCandidates[0] },
-    };
+    return { weather: weather, recs: emptyRecs_() };
   }
 
   var values = (body.prefs && body.prefs.values) || {};
@@ -95,7 +87,7 @@ function handleRecommend_(body) {
 
   var raw;
   try {
-    raw = callGroq_(buildSystemPrompt_(), userPrompt);
+    raw = callGemini_(buildSystemPrompt_(), userPrompt);
   } catch (err) {
     appendLog_({ input: userPrompt.slice(0, 2000), output: 'ERROR: ' + err.message });
     return { weather: weather, recs: emptyRecs_() };

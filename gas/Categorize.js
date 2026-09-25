@@ -96,5 +96,5 @@ function categorize_(tags) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { categorize_: categorize_ };
+  module.exports = { categorize_: categorize_, OSM_RULES_: OSM_RULES_ };
 }

@@ -1,4 +1,4 @@
-var GROQ_MODEL_ = 'qwen/qwen3.8-27b';
+var GEMINI_MODELS_ = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
 
 function buildSystemPrompt_() {
   return [
@@ -66,7 +66,6 @@ function buildResponseSchema_() {
       kapi: { type: 'string' },
     },
     required: ['id', 'score', 'reason', 'basis', 'kapi'],
-    additionalProperties: false,
   };
   var cats = ['food', 'cloth', 'stay', 'move', 'learn', 'fun'];
   var properties = {};
@@ -75,38 +74,93 @@ function buildResponseSchema_() {
     type: 'object',
     properties: properties,
     required: cats,
-    additionalProperties: false,
   };
 }
 
-function callGroq_(systemPrompt, userPrompt) {
-  var cfg = getConfig_();
-  var resp = UrlFetchApp.fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { Authorization: 'Bearer ' + cfg.groqApiKey },
-    payload: JSON.stringify({
-      model: GROQ_MODEL_,
-      reasoning_effort: 'low',
-      temperature: 0.3,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: { name: 'kapi_recs', strict: true, schema: buildResponseSchema_() },
-      },
-    }),
-    muteHttpExceptions: true,
-  });
-
-  var code = resp.getResponseCode();
-  var body = JSON.parse(resp.getContentText());
-  if (code < 200 || code >= 300) {
-    throw new Error('Groq 呼叫失敗：' + (body.error && body.error.message ? body.error.message : code));
+function extractGeminiText_(body) {
+  var cand = body && body.candidates && body.candidates[0];
+  if (!cand) return '';
+  var parts = (cand.content && cand.content.parts) || [];
+  var out = '';
+  for (var i = 0; i < parts.length; i++) {
+    if (parts[i].thought) continue;
+    if (typeof parts[i].text === 'string') out += parts[i].text;
   }
-  return JSON.parse(body.choices[0].message.content);
+  return out;
+}
+
+function callGemini_(systemPrompt, userPrompt) {
+  var cfg = getConfig_();
+  var payload = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    generationConfig: {
+      temperature: 0.3,
+      maxOutputTokens: 4096,
+      responseMimeType: 'application/json',
+      responseSchema: buildResponseSchema_(),
+    },
+  });
+  var lastProblem = '沒有可用的模型';
+
+  for (var i = 0; i < GEMINI_MODELS_.length; i++) {
+    var model = GEMINI_MODELS_[i];
+    var text;
+    try {
+      var resp = UrlFetchApp.fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent',
+        {
+          method: 'post',
+          contentType: 'application/json',
+          headers: { 'x-goog-api-key': cfg.geminiApiKey },
+          payload: payload,
+          muteHttpExceptions: true,
+        }
+      );
+      text = resp.getContentText();
+      if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) {
+        var errBody = {};
+        try { errBody = JSON.parse(text); } catch (ignored) {}
+        lastProblem = model + '：' + ((errBody.error && errBody.error.message) || resp.getResponseCode());
+        continue;
+      }
+    } catch (err) {
+      lastProblem = model + ' 連線失敗：' + err.message;
+      continue;
+    }
+
+    var body;
+    try {
+      body = JSON.parse(text);
+    } catch (err) {
+      lastProblem = model + ' 回傳的不是 JSON';
+      continue;
+    }
+
+    var cand = body.candidates && body.candidates[0];
+    if (!cand) {
+      lastProblem = model + ' 沒有回傳任何結果';
+      continue;
+    }
+    if (cand.finishReason && cand.finishReason !== 'STOP') {
+      lastProblem = model + ' 回應不完整：finishReason=' + cand.finishReason;
+      continue;
+    }
+
+    var content = extractGeminiText_(body);
+    if (!content) {
+      lastProblem = model + ' 回傳空內容';
+      continue;
+    }
+    try {
+      return JSON.parse(content);
+    } catch (err) {
+      lastProblem = model + ' 的 JSON 內容無法解析';
+      continue;
+    }
+  }
+
+  throw new Error('Gemini 全部失敗，最後一個問題：' + lastProblem);
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -115,5 +169,6 @@ if (typeof module !== 'undefined' && module.exports) {
     buildUserPrompt_: buildUserPrompt_,
     buildResponseSchema_: buildResponseSchema_,
     summarizeFeedback_: summarizeFeedback_,
+    extractGeminiText_: extractGeminiText_,
   };
 }

@@ -1,19 +1,25 @@
 const assert = require('assert');
-const { categorize_ } = require('../gas/Categorize.js');
+const { categorize_, OSM_RULES_ } = require('../gas/Categorize.js');
 const { haversineMeters_, walkMinutes_ } = require('../gas/Distance.js');
 
 global.categorize_ = categorize_;
+global.OSM_RULES_ = OSM_RULES_;
 global.haversineMeters_ = haversineMeters_;
 global.walkMinutes_ = walkMinutes_;
 
 const { buildOverpassQuery_, elementToCandidate_, buildCandidateLists_ } = require('../gas/Places.js');
 
 function run() {
-  const q = buildOverpassQuery_(25.03, 121.56, 1500);
-  assert.ok(q.includes('around:1500,25.03,121.56'));
-  assert.ok(q.includes('node["amenity"]'));
-  assert.ok(q.includes('highway"="bus_stop"'));
+  const q = buildOverpassQuery_(25.03, 121.56, 1200);
+  assert.ok(q.includes('around:1200,25.03,121.56'));
   assert.ok(q.includes('out center;'));
+  assert.ok(q.includes('restaurant|'), '查詢要明確列出我們認得的 amenity 值');
+  assert.ok(q.includes('bus_stop'));
+  assert.ok(!/\["amenity"\]\(/.test(q), '不可以抓「所有 amenity」，那會讓 Overpass 逾時');
+  assert.strictEqual((q.match(/\["name"\]/g) || []).length, 14, '每個標籤條件都要要求有 name，server 端就先濾掉無名地點');
+  OSM_RULES_.forEach(r => {
+    assert.ok(q.includes(r.value), `查詢應涵蓋分類表裡的 ${r.key}=${r.value}`);
+  });
 
   const node = elementToCandidate_({
     type: 'node', id: 1, lat: 25.03, lon: 121.56,

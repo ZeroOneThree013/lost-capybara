@@ -1,13 +1,17 @@
 function buildOverpassQuery_(lat, lng, radius) {
   var around = 'around:' + radius + ',' + lat + ',' + lng;
-  var parts = [];
-  ['amenity', 'shop', 'tourism', 'leisure'].forEach(function (k) {
-    parts.push('node["' + k + '"](' + around + ');');
-    parts.push('way["' + k + '"](' + around + ');');
+  var byKey = {};
+  OSM_RULES_.forEach(function (r) {
+    if (!byKey[r.key]) byKey[r.key] = [];
+    if (byKey[r.key].indexOf(r.value) === -1) byKey[r.key].push(r.value);
   });
-  parts.push('node["highway"="bus_stop"](' + around + ');');
-  parts.push('node["railway"](' + around + ');');
-  parts.push('node["public_transport"="platform"](' + around + ');');
+
+  var parts = [];
+  Object.keys(byKey).forEach(function (key) {
+    var filter = '["' + key + '"~"^(' + byKey[key].join('|') + ')$"]["name"]';
+    parts.push('node' + filter + '(' + around + ');');
+    parts.push('way' + filter + '(' + around + ');');
+  });
   return '[out:json][timeout:25];(' + parts.join('') + ');out center;';
 }
 
@@ -68,19 +72,64 @@ function cachePlaceInfo_(candidates) {
   });
 }
 
+var OVERPASS_ENDPOINTS_ = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
+
+function fetchOverpassJson_(query) {
+  var lastProblem = '沒有可用的伺服器';
+
+  for (var i = 0; i < OVERPASS_ENDPOINTS_.length; i++) {
+    var endpoint = OVERPASS_ENDPOINTS_[i];
+    var text;
+    try {
+      var resp = UrlFetchApp.fetch(endpoint, {
+        method: 'post',
+        payload: 'data=' + encodeURIComponent(query),
+        headers: { Accept: 'application/json' },
+        muteHttpExceptions: true,
+      });
+      if (resp.getResponseCode() !== 200) {
+        lastProblem = endpoint + ' 回應 HTTP ' + resp.getResponseCode();
+        continue;
+      }
+      text = resp.getContentText();
+    } catch (err) {
+      lastProblem = endpoint + ' 連線失敗：' + err.message;
+      continue;
+    }
+
+    if (text.charAt(0) !== '{') {
+      lastProblem = endpoint + ' 回傳的不是 JSON：' + text.slice(0, 160).replace(/\s+/g, ' ');
+      continue;
+    }
+
+    var json;
+    try {
+      json = JSON.parse(text);
+    } catch (err) {
+      lastProblem = endpoint + ' 的 JSON 解析失敗';
+      continue;
+    }
+
+    if (json.remark && !(json.elements || []).length) {
+      lastProblem = endpoint + ' 回報：' + json.remark;
+      continue;
+    }
+    return json;
+  }
+
+  throw new Error('Overpass 全部失敗，最後一個問題：' + lastProblem);
+}
+
 function fetchOverpassCandidates_(lat, lng, radius) {
   var key = 'places:' + lat.toFixed(3) + ',' + lng.toFixed(3) + ':' + radius;
   var cached = getCache_(key);
   if (cached) return cached;
 
-  var query = buildOverpassQuery_(lat, lng, radius);
-  var resp = UrlFetchApp.fetch('https://overpass.kumi.systems/api/interpreter', {
-    method: 'post',
-    payload: 'data=' + encodeURIComponent(query),
-    headers: { 'User-Agent': 'lost-capybara-recommendation-app/1.0', Accept: 'application/json' },
-    muteHttpExceptions: true,
-  });
-  var json = JSON.parse(resp.getContentText());
+  var json = fetchOverpassJson_(buildOverpassQuery_(lat, lng, radius));
   var candidates = (json.elements || []).map(elementToCandidate_).filter(Boolean);
   setCache_(key, candidates, 12 * 60 * 60 * 1000);
   return candidates;
