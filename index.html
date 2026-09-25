@@ -554,10 +554,21 @@ async function fetchRecs(){
   const ti = timeInfo();
   return apiPost_({action:'recommend', lat:state.coords.lat, lng:state.coords.lng, time:ti.clock, prefs:state.prefs});
 }
+function findRec(id){
+  const recs = (state.data && state.data.recs) || {};
+  for(const c of CATS){
+    const it = (recs[c.id] || []).find(x => x.id === id);
+    if(it) return {it, cat:c.id};
+  }
+  return null;
+}
 function sendFeedback(id, type){
   store.set('kapi_feedback', state.feedback);
   if(!CONFIG.API_URL) return;
-  apiPost_({action:'feedback', id, type}).catch(e => { if(e.code==='unauthorized') handleUnauthorized(e.message); });
+  const found = findRec(id);
+  const payload = {action:'feedback', id, type};
+  if(found){ payload.name = found.it.name; payload.kind = found.it.kind; payload.category = found.cat; }
+  apiPost_(payload).catch(e => { if(e.code==='unauthorized') handleUnauthorized(e.message); });
 }
 const prefFresh = () => {
   if(!state.prefs || !state.prefs.savedAt) return false;

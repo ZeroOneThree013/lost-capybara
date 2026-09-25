@@ -66,12 +66,6 @@ function buildCandidateLists_(candidates, origin, opts) {
   return byCat;
 }
 
-function cachePlaceInfo_(candidates) {
-  candidates.forEach(function (c) {
-    setCache_('place:' + c.id, { name: c.name, kind: c.kind, cat: c.cat }, 30 * 24 * 60 * 60 * 1000);
-  });
-}
-
 var OVERPASS_ENDPOINTS_ = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',

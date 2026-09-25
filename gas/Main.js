@@ -33,8 +33,7 @@ function jsonOutput_(obj) {
 
 function handleFeedback_(body) {
   if (!body.id || !body.type) throw new Error('缺少 id 或 type');
-  var info = getCache_('place:' + body.id) || {};
-  appendFeedback_({ id: body.id, type: body.type, name: info.name, category: info.cat, kind: info.kind });
+  appendFeedback_({ id: body.id, type: body.type, name: body.name, category: body.category, kind: body.kind });
   return { ok: true };
 }
 
@@ -59,12 +58,6 @@ function handleRecommend_(body) {
     feedbackMap: feedbackMap,
     limit: 15,
   });
-
-  var flatForCache = [];
-  Object.keys(lists).forEach(function (cat) {
-    lists[cat].forEach(function (it) { flatForCache.push({ id: it.id, name: it.name, kind: it.kind, cat: cat }); });
-  });
-  cachePlaceInfo_(flatForCache);
 
   var hasAnyCandidate = Object.keys(lists).some(function (cat) { return lists[cat].length > 0; });
   if (!hasAnyCandidate) {

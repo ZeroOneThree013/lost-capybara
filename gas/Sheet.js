@@ -72,18 +72,14 @@ function getCache_(key) {
   var sh = getSheet_('Cache', ['key', 'json', 'expiresAt']);
   var last = sh.getLastRow();
   if (last < 2) return null;
-  var rows = sh.getRange(2, 1, last - 1, 3).getValues();
-  var now = new Date();
-  for (var i = rows.length - 1; i >= 0; i--) {
-    if (rows[i][0] === key) {
-      var expiresAt = new Date(rows[i][2]);
-      if (expiresAt > now) {
-        try {
-          return JSON.parse(rows[i][1]);
-        } catch (e) {
-          return null;
-        }
-      }
+  var keys = sh.getRange(2, 1, last - 1, 1).getValues();
+  for (var i = keys.length - 1; i >= 0; i--) {
+    if (keys[i][0] !== key) continue;
+    var row = sh.getRange(i + 2, 2, 1, 2).getValues()[0];
+    if (new Date(row[1]) <= new Date()) return null;
+    try {
+      return JSON.parse(row[0]);
+    } catch (e) {
       return null;
     }
   }
