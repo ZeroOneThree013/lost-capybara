@@ -234,6 +234,13 @@ textarea{resize:vertical; min-height:76px}
 .btn.primary{background:var(--moss); border-color:var(--moss-deep); color:#fff; box-shadow:0 4px 0 var(--moss-deep)}
 .btn.primary:active{box-shadow:0 1px 0 var(--moss-deep)}
 
+.gate{position:fixed; inset:0; z-index:50; display:grid; place-items:center; background:rgba(58,42,26,.55); padding:16px}
+.gate-card{width:100%; max-width:360px; background:var(--card); border:2px solid var(--line); border-radius:22px; box-shadow:var(--sticker); padding:28px 24px; text-align:center; display:grid; gap:14px; justify-items:center}
+.gate-card h2{font-size:19px}
+.gate-card p{color:var(--ink-soft); font-size:14px}
+.gate-card form{width:100%; display:grid; gap:10px}
+.gate-error{color:#B8402D; font-size:13px}
+
 
 .nav{
   position:sticky; bottom:0; z-index:5; order:3; display:grid; grid-template-columns:1fr 1fr; gap:10px;
@@ -380,9 +387,22 @@ svg.i{display:block}
 
 <div class="toast" id="toast" role="status" aria-live="polite"><div class="avatar" aria-hidden="true"></div><span id="toast-text"></span></div>
 
+<div class="gate" id="gate" hidden>
+  <div class="gate-card">
+    <div class="avatar" aria-hidden="true"></div>
+    <h2>卡皮想先確認是你</h2>
+    <p>輸入通關碼，這台裝置之後就會記住了。</p>
+    <form id="gate-form" autocomplete="off">
+      <input class="text" id="gate-token" type="password" autocomplete="off" placeholder="通關碼" required>
+      <p class="gate-error" id="gate-error" hidden></p>
+      <button type="submit" class="btn primary">開始使用</button>
+    </form>
+  </div>
+</div>
+
 <script>
 
-const CONFIG = { API_URL: "", TOKEN: "" };
+const CONFIG = { API_URL: "https://script.google.com/macros/s/AKfycbw4yH9oSH5mF9Xj97srga9r6moKORQhyDal82xXe6R6sTHjB-8AshK1kxezxNtDxtMQ/exec", TOKEN: "" };
 
 const CATS = [
   {id:'food',  glyph:'食', title:'吃什麼',    noun:'餐廳',   color:'#EDA55E'},
@@ -516,20 +536,28 @@ function greetLine(){
 }
 
 
+async function apiPost_(payload){
+  const res = await fetch(CONFIG.API_URL, {
+    method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(Object.assign({token:CONFIG.TOKEN}, payload))
+  });
+  const data = await res.json();
+  if(data && data.error) throw Object.assign(new Error(data.message || '發生錯誤'), {code:data.error});
+  return data;
+}
+async function fetchState(){
+  if(!CONFIG.API_URL) return null;
+  return apiPost_({action:'getState'});
+}
 async function fetchRecs(){
   if(!CONFIG.API_URL){ await sleep(1300); return MOCK; }
   const ti = timeInfo();
-  const res = await fetch(CONFIG.API_URL, {
-    method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify({action:'recommend', token:CONFIG.TOKEN, lat:state.coords.lat, lng:state.coords.lng, time:ti.clock, prefs:state.prefs})
-  });
-  return await res.json();
+  return apiPost_({action:'recommend', lat:state.coords.lat, lng:state.coords.lng, time:ti.clock, prefs:state.prefs});
 }
 function sendFeedback(id, type){
   store.set('kapi_feedback', state.feedback);
   if(!CONFIG.API_URL) return;
-  fetch(CONFIG.API_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify({action:'feedback', token:CONFIG.TOKEN, id, type})}).catch(()=>{});
+  apiPost_({action:'feedback', id, type}).catch(e => { if(e.code==='unauthorized') handleUnauthorized(e.message); });
 }
 const prefFresh = () => {
   if(!state.prefs || !state.prefs.savedAt) return false;
@@ -614,20 +642,65 @@ function renderHome(){
   $('#nudge-text').textContent = state.prefs ? '這個月的偏好還沒更新，卡皮還在用舊資料。' : '還沒填過偏好表單，先告訴卡皮你喜歡什麼。';
 }
 
+const TOKEN_KEY = 'kapi_token';
+const getStoredToken = () => store.get(TOKEN_KEY, '');
+const setStoredToken = t => store.set(TOKEN_KEY, t);
+
+function showGate(errorText){
+  $('#gate-error').hidden = !errorText;
+  if(errorText) $('#gate-error').textContent = errorText;
+  $('#gate-token').value = '';
+  $('#gate').hidden = false;
+}
+function hideGate(){ $('#gate').hidden = true; }
+
+function handleUnauthorized(message){
+  setStoredToken('');
+  CONFIG.TOKEN = '';
+  showGate(message || '通關碼不對喔，卡皮不認識你。');
+}
+
+function errorMessage_(e){
+  if(e && e.code && e.message) return e.message;
+  return '請確認網路，或稍後再試一次。';
+}
+
 async function boot(){
   $('#tabs').hidden = true; $('#nudge').hidden = true;
   $('#panel').innerHTML = loaderHTML();
   say(['我先看看你在哪裡……','（我自己常常搞不清楚我在哪）']);
+
+  try{
+    const remote = await fetchState();
+    if(remote){
+      if(remote.prefs){ state.prefs = remote.prefs; store.set('kapi_prefs', state.prefs); }
+      if(remote.feedback){
+        const simplified = {};
+        Object.keys(remote.feedback).forEach(id => { simplified[id] = remote.feedback[id].type; });
+        state.feedback = simplified;
+        store.set('kapi_feedback', state.feedback);
+      }
+    }
+  }catch(e){
+    if(e.code === 'unauthorized') return handleUnauthorized(e.message);
+  }
+
   state.coords = await locate();
   say(['找到了！','我來翻翻你的偏好表。']);
   try{
     state.data = await fetchRecs();
   }catch(e){
-    $('#panel').innerHTML = `<div class="empty"><div class="pic" role="img" aria-label="卡皮歪著頭，一臉困惑"></div><div class="txt"><h3>卡皮連不上伺服器</h3><p>請確認網路，或檢查 API_URL 是否填對。</p><button class="btn" id="retry">再試一次</button></div></div>`;
+    if(e.code === 'unauthorized') return handleUnauthorized(e.message);
+    $('#panel').innerHTML = `<div class="empty"><div class="pic" role="img" aria-label="卡皮歪著頭，一臉困惑"></div><div class="txt"><h3>卡皮連不上伺服器</h3><p>${esc(errorMessage_(e))}</p><button class="btn" id="retry">再試一次</button></div></div>`;
     say(['糟糕，我迷路了。']);
     return;
   }
   renderHome();
+}
+
+function start(){
+  hideGate();
+  boot();
 }
 
 
@@ -722,10 +795,24 @@ $('#pref-form').addEventListener('submit', e => {
   state.prefs = {savedAt:new Date().toISOString(), values:collectPrefs(e.target)};
   store.set('kapi_prefs', state.prefs);
   renderPrefStatus(); toast('偏好存好了，卡皮記住囉。');
-  if(CONFIG.API_URL) fetch(CONFIG.API_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({action:'savePrefs', token:CONFIG.TOKEN, prefs:state.prefs})}).catch(()=>{});
+  if(CONFIG.API_URL) apiPost_({action:'savePrefs', prefs:state.prefs}).catch(e => { if(e.code==='unauthorized') handleUnauthorized(e.message); });
 });
 
-boot();
+$('#gate-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const t = $('#gate-token').value.trim();
+  if(!t) return;
+  CONFIG.TOKEN = t;
+  setStoredToken(t);
+  start();
+});
+
+CONFIG.TOKEN = getStoredToken();
+if(CONFIG.API_URL && !CONFIG.TOKEN){
+  showGate();
+}else{
+  boot();
+}
 </script>
 </body>
 </html>
