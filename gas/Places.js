@@ -74,15 +74,15 @@ function fetchOverpassCandidates_(lat, lng, radius) {
   if (cached) return cached;
 
   var query = buildOverpassQuery_(lat, lng, radius);
-  var resp = UrlFetchApp.fetch('https://overpass-api.de/api/interpreter', {
+  var resp = UrlFetchApp.fetch('https://overpass.kumi.systems/api/interpreter', {
     method: 'post',
     payload: 'data=' + encodeURIComponent(query),
+    headers: { 'User-Agent': 'lost-capybara-recommendation-app/1.0', Accept: 'application/json' },
     muteHttpExceptions: true,
   });
   var json = JSON.parse(resp.getContentText());
   var candidates = (json.elements || []).map(elementToCandidate_).filter(Boolean);
   setCache_(key, candidates, 12 * 60 * 60 * 1000);
-  cachePlaceInfo_(candidates);
   return candidates;
 }
 

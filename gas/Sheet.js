@@ -91,6 +91,9 @@ function getCache_(key) {
 }
 
 function setCache_(key, value, ttlMs) {
+  var json = JSON.stringify(value);
+  if (json.length > 45000) return;
+
   var sh = getSheet_('Cache', ['key', 'json', 'expiresAt']);
   var expiresAt = new Date(Date.now() + ttlMs).toISOString();
   var last = sh.getLastRow();
@@ -98,12 +101,12 @@ function setCache_(key, value, ttlMs) {
     var keys = sh.getRange(2, 1, last - 1, 1).getValues();
     for (var i = 0; i < keys.length; i++) {
       if (keys[i][0] === key) {
-        sh.getRange(i + 2, 2, 1, 2).setValues([[JSON.stringify(value), expiresAt]]);
+        sh.getRange(i + 2, 2, 1, 2).setValues([[json, expiresAt]]);
         return;
       }
     }
   }
-  sh.appendRow([key, JSON.stringify(value), expiresAt]);
+  sh.appendRow([key, json, expiresAt]);
 }
 
 function appendLog_(summary) {

@@ -23,7 +23,7 @@ function doPost(e) {
         return jsonOutput_({ error: 'unknown_action', message: '卡皮看不懂這個請求。' });
     }
   } catch (err) {
-    return jsonOutput_({ error: 'server_error', message: '卡皮的腦袋打結了，等一下再試試。' });
+    return jsonOutput_({ error: 'server_error', message: '卡皮的腦袋打結了，等一下再試試。', debug: String(err && err.stack || err) });
   }
 }
 
@@ -60,9 +60,23 @@ function handleRecommend_(body) {
     limit: 15,
   });
 
+  var flatForCache = [];
+  Object.keys(lists).forEach(function (cat) {
+    lists[cat].forEach(function (it) { flatForCache.push({ id: it.id, name: it.name, kind: it.kind, cat: cat }); });
+  });
+  cachePlaceInfo_(flatForCache);
+
   var hasAnyCandidate = Object.keys(lists).some(function (cat) { return lists[cat].length > 0; });
   if (!hasAnyCandidate) {
-    return { weather: weather, recs: emptyRecs_() };
+    var listCounts = {};
+    Object.keys(lists).forEach(function (cat) { listCounts[cat] = lists[cat].length; });
+    var rawCatCounts = {};
+    rawCandidates.forEach(function (c) { rawCatCounts[c.cat] = (rawCatCounts[c.cat] || 0) + 1; });
+    return {
+      weather: weather,
+      recs: emptyRecs_(),
+      debug: { rawCandidateCount: rawCandidates.length, rawCatCounts: rawCatCounts, listCounts: listCounts, rainFlag: weather.rain, sampleRaw: rawCandidates[0] },
+    };
   }
 
   var values = (body.prefs && body.prefs.values) || {};
