@@ -44,8 +44,33 @@ function handleSavePrefs_(body) {
 }
 
 function handleRecommend_(body) {
-  return {
-    weather: { text: '', temp: null, rain: false },
-    recs: { food: [], cloth: [], stay: [], move: [], learn: [], fun: [] },
-  };
+  if (typeof body.lat !== 'number' || typeof body.lng !== 'number') throw new Error('缺少座標');
+
+  var weather = fetchWeather_(body.lat, body.lng);
+  var rawCandidates = fetchOverpassCandidates_(body.lat, body.lng, 1500);
+  var feedbackMap = getFeedbackMap_();
+  var lists = buildCandidateLists_(rawCandidates, { lat: body.lat, lng: body.lng }, {
+    rain: weather.rain,
+    feedbackMap: feedbackMap,
+    limit: 15,
+  });
+
+  var recs = {};
+  Object.keys(lists).forEach(function (cat) {
+    recs[cat] = lists[cat].slice(0, 5).map(function (it) {
+      return {
+        id: it.id,
+        name: it.name,
+        kind: it.kind,
+        walk: it.walk,
+        m: it.m,
+        reason: '（階段 3 才會由 AI 產生推薦理由）',
+        basis: [],
+        kapi: '（階段 3 才會有卡皮的話）',
+        uncertain: it.hasOpeningHours ? undefined : '營業時間我沒有把握，出門前再確認一下。',
+      };
+    });
+  });
+
+  return { weather: weather, recs: recs };
 }
