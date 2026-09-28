@@ -519,7 +519,7 @@ function toast(text){
 function locate(){
   return new Promise(res => {
     const fallback = {lat:25.0330, lng:121.5654, mock:true};
-    if(!('geolocation' in navigator)) return res(fallback);
+    if(!CONFIG.API_URL || !('geolocation' in navigator)) return res(fallback);
     navigator.geolocation.getCurrentPosition(
       p => res({lat:p.coords.latitude, lng:p.coords.longitude, mock:false}),
       () => res(fallback),
@@ -836,7 +836,17 @@ $('#gate-form').addEventListener('submit', e => {
   start();
 });
 
-CONFIG.TOKEN = getStoredToken();
+const params = new URLSearchParams(location.search);
+if(params.get('demo')){
+  CONFIG.API_URL = '';
+}else{
+  const urlToken = params.get('k');
+  if(urlToken){
+    setStoredToken(urlToken);
+    history.replaceState(null, '', location.pathname);
+  }
+  CONFIG.TOKEN = getStoredToken();
+}
 if(CONFIG.API_URL && !CONFIG.TOKEN){
   showGate();
 }else{
