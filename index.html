@@ -239,6 +239,8 @@ textarea{resize:vertical; min-height:76px}
 .gate-card h2{font-size:19px}
 .gate-card p{color:var(--ink-soft); font-size:14px}
 .gate-card form{width:100%; display:grid; gap:10px}
+.gate-sec{width:100%; display:grid; gap:14px; justify-items:center}
+.gate-picks{width:100%; display:grid; gap:10px}
 .gate-error{color:#B8402D; font-size:13px}
 
 
@@ -390,13 +392,24 @@ svg.i{display:block}
 <div class="gate" id="gate" hidden>
   <div class="gate-card">
     <div class="avatar" aria-hidden="true"></div>
-    <h2>卡皮想先確認是你</h2>
-    <p>輸入通關碼，這台裝置之後就會記住了。</p>
-    <form id="gate-form" autocomplete="off">
-      <input class="text" id="gate-token" type="password" autocomplete="off" placeholder="通關碼" required>
-      <p class="gate-error" id="gate-error" hidden></p>
-      <button type="submit" class="btn primary">開始使用</button>
-    </form>
+    <div class="gate-sec" id="gate-pick">
+      <h2>你是誰呀？</h2>
+      <p>卡皮想知道要怎麼帶你逛。</p>
+      <div class="gate-picks">
+        <button class="btn primary" id="pick-owner">我是本人</button>
+        <button class="btn" id="pick-demo">先參觀看看</button>
+      </div>
+    </div>
+    <div class="gate-sec" id="gate-auth" hidden>
+      <h2>卡皮想先確認是你</h2>
+      <p>輸入通關碼，這台裝置之後就會記住了。</p>
+      <form id="gate-form" autocomplete="off">
+        <input class="text" id="gate-token" type="password" autocomplete="off" placeholder="通關碼" required>
+        <p class="gate-error" id="gate-error" hidden></p>
+        <button type="submit" class="btn primary">開始使用</button>
+      </form>
+      <button class="link" id="pick-demo-alt">先參觀看看</button>
+    </div>
   </div>
 </div>
 
@@ -675,12 +688,21 @@ const TOKEN_KEY = 'kapi_token';
 const getStoredToken = () => store.get(TOKEN_KEY, '');
 const setStoredToken = t => store.set(TOKEN_KEY, t);
 
+function showPicker(){
+  $('#gate-pick').hidden = false;
+  $('#gate-auth').hidden = true;
+  $('#gate').hidden = false;
+}
 function showGate(errorText){
+  $('#gate-pick').hidden = true;
+  $('#gate-auth').hidden = false;
   $('#gate-error').hidden = !errorText;
   if(errorText) $('#gate-error').textContent = errorText;
   $('#gate-token').value = '';
   $('#gate').hidden = false;
+  $('#gate-token').focus();
 }
+function goDemo(){ location.replace(location.pathname + '?demo=1'); }
 function hideGate(){ $('#gate').hidden = true; }
 
 function handleUnauthorized(message){
@@ -806,6 +828,8 @@ document.addEventListener('click', e => {
   if(t.dataset.undo){ delete state.feedback[t.dataset.undo]; sendFeedback(t.dataset.undo,'clear'); renderPanel(); return; }
   if(t.id==='go-pref' || t.id==='nudge' || t.id==='nav-pref') return show('pref');
   if(t.id==='nav-home') return show('home');
+  if(t.id==='pick-owner') return showGate();
+  if(t.id==='pick-demo' || t.id==='pick-demo-alt') return goDemo();
   if(t.id==='btn-relocate'){ show('home'); return boot(true); }
   if(t.id==='retry') return boot();
 });
@@ -848,7 +872,7 @@ if(params.get('demo')){
   CONFIG.TOKEN = getStoredToken();
 }
 if(CONFIG.API_URL && !CONFIG.TOKEN){
-  showGate();
+  showPicker();
 }else{
   boot();
 }
