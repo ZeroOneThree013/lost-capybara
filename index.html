@@ -235,20 +235,21 @@ textarea{resize:vertical; min-height:76px}
 .btn.primary:active{box-shadow:0 1px 0 var(--moss-deep)}
 
 .mode-dock{
-  position:fixed; z-index:40; right:0; bottom:24px; display:flex; align-items:stretch;
-  transform:translateX(calc(100% - 32px)); transition:transform .25s ease;
+  position:fixed; z-index:40; left:0; top:calc(56px + env(safe-area-inset-top,0px));
+  display:flex; flex-direction:row-reverse; align-items:stretch;
+  transform:translateX(calc(-100% + 32px)); transition:transform .25s ease;
 }
 .mode-dock[data-open="true"]{transform:translateX(0)}
 .mode-tab{
   flex:none; width:32px; display:grid; place-items:center; padding:0;
-  background:var(--wood); border:2px solid var(--line); border-right:0; border-radius:14px 0 0 14px;
-  box-shadow:-3px 4px 0 rgba(122,82,48,.22);
+  background:var(--wood); border:2px solid var(--line); border-left:0; border-radius:0 14px 14px 0;
+  box-shadow:3px 4px 0 rgba(122,82,48,.22);
 }
-.mode-tab .i{transition:transform .25s ease; transform:rotate(90deg)}
-.mode-dock[data-open="true"] .mode-tab .i{transform:rotate(-90deg)}
+.mode-tab .i{transition:transform .25s ease; transform:rotate(-90deg)}
+.mode-dock[data-open="true"] .mode-tab .i{transform:rotate(90deg)}
 .mode-panel{
   display:grid; align-items:center; padding:10px; background:var(--card);
-  border:2px solid var(--line); border-right:0; box-shadow:-3px 4px 0 rgba(122,82,48,.22);
+  border:2px solid var(--line); border-left:0; box-shadow:3px 4px 0 rgba(122,82,48,.22);
 }
 .mode-dock[data-open="false"] .mode-panel{visibility:hidden}
 .mode-panel .btn{font-size:14px; white-space:nowrap}
@@ -288,7 +289,6 @@ svg.i{display:block}
 .pref-pic{display:none}
 @media (max-width:899px){
   body[data-view="pref"] .brand, body[data-view="pref"] .locate{display:none}
-  .mode-dock{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 }
 @media (min-width:620px){
   .list{grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch}
@@ -310,6 +310,7 @@ svg.i{display:block}
   .locate .loc-text{display:block}
 
   main{padding-bottom:56px}
+  .mode-dock{top:82px}
   .home{display:grid; grid-template-columns:380px minmax(0,1fr); gap:44px; max-width:1180px; margin:0 auto; padding:32px 32px 0; align-items:start}
   .side{position:sticky; top:96px}
   .hero{max-height:none; border:3px solid var(--line); border-radius:30px; box-shadow:0 6px 0 rgba(122,82,48,.25)}
