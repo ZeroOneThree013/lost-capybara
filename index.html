@@ -234,6 +234,25 @@ textarea{resize:vertical; min-height:76px}
 .btn.primary{background:var(--moss); border-color:var(--moss-deep); color:#fff; box-shadow:0 4px 0 var(--moss-deep)}
 .btn.primary:active{box-shadow:0 1px 0 var(--moss-deep)}
 
+.mode-dock{
+  position:fixed; z-index:40; right:0; bottom:24px; display:flex; align-items:stretch;
+  transform:translateX(calc(100% - 32px)); transition:transform .25s ease;
+}
+.mode-dock[data-open="true"]{transform:translateX(0)}
+.mode-tab{
+  flex:none; width:32px; display:grid; place-items:center; padding:0;
+  background:var(--wood); border:2px solid var(--line); border-right:0; border-radius:14px 0 0 14px;
+  box-shadow:-3px 4px 0 rgba(122,82,48,.22);
+}
+.mode-tab .i{transition:transform .25s ease; transform:rotate(90deg)}
+.mode-dock[data-open="true"] .mode-tab .i{transform:rotate(-90deg)}
+.mode-panel{
+  display:grid; align-items:center; padding:10px; background:var(--card);
+  border:2px solid var(--line); border-right:0; box-shadow:-3px 4px 0 rgba(122,82,48,.22);
+}
+.mode-dock[data-open="false"] .mode-panel{visibility:hidden}
+.mode-panel .btn{font-size:14px; white-space:nowrap}
+
 .gate{position:fixed; inset:0; z-index:50; display:grid; place-items:center; background:rgba(58,42,26,.55); padding:16px}
 .gate-card{width:100%; max-width:360px; background:var(--card); border:2px solid var(--line); border-radius:22px; box-shadow:var(--sticker); padding:28px 24px; text-align:center; display:grid; gap:14px; justify-items:center}
 .gate-card h2{font-size:19px}
@@ -269,6 +288,7 @@ svg.i{display:block}
 .pref-pic{display:none}
 @media (max-width:899px){
   body[data-view="pref"] .brand, body[data-view="pref"] .locate{display:none}
+  .mode-dock{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 }
 @media (min-width:620px){
   .list{grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch}
@@ -379,7 +399,6 @@ svg.i{display:block}
             <p>每個月重填一次，卡皮只會照這份表單挑地方，不會亂猜。</p>
           </div>
           <div class="status" id="pref-status" role="status"></div>
-          <button class="link" id="mode-switch"></button>
           <div class="pref-pic" role="img" aria-label="卡皮揹著背包，開心地準備出發"></div>
         </div>
         <form id="pref-form" autocomplete="off"></form>
@@ -389,6 +408,13 @@ svg.i{display:block}
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"><div class="avatar" aria-hidden="true"></div><span id="toast-text"></span></div>
+
+<div class="mode-dock" id="mode-dock" data-open="false" hidden>
+  <button class="mode-tab" id="mode-toggle" aria-expanded="false" aria-controls="mode-panel" aria-label="切換模式"><svg class="i"><use href="#i-chev"/></svg></button>
+  <div class="mode-panel" id="mode-panel">
+    <button class="btn" id="mode-switch"></button>
+  </div>
+</div>
 
 <div class="gate" id="gate" hidden>
   <div class="gate-card">
@@ -689,12 +715,19 @@ const TOKEN_KEY = 'kapi_token';
 const getStoredToken = () => store.get(TOKEN_KEY, '');
 const setStoredToken = t => store.set(TOKEN_KEY, t);
 
+function setDock(open){
+  const d = $('#mode-dock');
+  d.dataset.open = open ? 'true' : 'false';
+  $('#mode-toggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+}
 function showPicker(){
+  $('#mode-dock').hidden = true;
   $('#gate-pick').hidden = false;
   $('#gate-auth').hidden = true;
   $('#gate').hidden = false;
 }
 function showGate(errorText){
+  $('#mode-dock').hidden = true;
   $('#gate-pick').hidden = true;
   $('#gate-auth').hidden = false;
   $('#gate-error').hidden = !errorText;
@@ -705,7 +738,7 @@ function showGate(errorText){
 }
 function goDemo(){ location.replace(location.pathname + '?demo=1'); }
 function goReal(){ location.replace(location.pathname); }
-function hideGate(){ $('#gate').hidden = true; }
+function hideGate(){ $('#gate').hidden = true; $('#mode-dock').hidden = false; }
 
 function handleUnauthorized(message){
   setStoredToken('');
@@ -832,6 +865,7 @@ document.addEventListener('click', e => {
   if(t.id==='nav-home') return show('home');
   if(t.id==='pick-owner') return showGate();
   if(t.id==='pick-demo' || t.id==='pick-demo-alt') return goDemo();
+  if(t.id==='mode-toggle') return setDock($('#mode-dock').dataset.open !== 'true');
   if(t.id==='mode-switch') return CONFIG.API_URL ? goDemo() : goReal();
   if(t.id==='btn-relocate'){ show('home'); return boot(true); }
   if(t.id==='retry') return boot();
@@ -874,11 +908,12 @@ if(params.get('demo')){
   }
   CONFIG.TOKEN = getStoredToken();
 }
-$('#mode-switch').textContent = CONFIG.API_URL ? '切換到展示模式' : '我是本人，切換回真實推薦';
+$('#mode-switch').textContent = CONFIG.API_URL ? '切換到展示模式' : '切換到真實推薦';
 
 if(CONFIG.API_URL && !CONFIG.TOKEN){
   showPicker();
 }else{
+  $('#mode-dock').hidden = false;
   boot();
 }
 </script>
