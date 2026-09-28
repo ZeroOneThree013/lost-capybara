@@ -19,6 +19,8 @@ function doPost(e) {
         return jsonOutput_(handleFeedback_(body));
       case 'savePrefs':
         return jsonOutput_(handleSavePrefs_(body));
+      case 'getState':
+        return jsonOutput_(handleGetState_());
       default:
         return jsonOutput_({ error: 'unknown_action', message: '卡皮看不懂這個請求。' });
     }
@@ -41,6 +43,10 @@ function handleSavePrefs_(body) {
   if (!body.prefs || !body.prefs.savedAt || !body.prefs.values) throw new Error('缺少 prefs');
   savePrefs_(body.prefs);
   return { ok: true };
+}
+
+function handleGetState_() {
+  return { prefs: getPrefs_(), feedback: getFeedbackMap_() };
 }
 
 function emptyRecs_() {
