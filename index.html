@@ -452,28 +452,34 @@ const FORM = [
     {k:'avoid', t:'chips', label:'忌口', opts:['不吃辣','不吃牛','不吃海鮮','不吃內臟'], def:['不吃辣']},
     {k:'foodBudget', t:'range', label:'一餐預算', min:50, max:600, step:50, def:200, fmt:v=>`${v} 元內`},
     {k:'foodMood', t:'seg', label:'用餐氣氛', opts:['安靜','都可以','熱鬧'], def:'安靜'},
+    {k:'foodNote', t:'text', label:'還想吃什麼？', ph:'例如：想找有插座可以久坐的', def:''},
   ]},
   {cat:'cloth', fields:[
     {k:'style', t:'chips', label:'喜歡的風格', opts:['簡約','日系','街頭','戶外機能','復古'], def:['簡約']},
     {k:'clothBudget', t:'range', label:'一件預算', min:300, max:3000, step:100, def:1000, fmt:v=>`${v} 元內`},
     {k:'shopType', t:'chips', label:'想逛的店型', opts:['選物店','二手店','大型商場','獨立品牌'], def:['選物店']},
+    {k:'clothNote', t:'text', label:'還想逛什麼？', ph:'例如：想找耐穿的登山外套', def:''},
   ]},
   {cat:'stay', fields:[
     {k:'stayType', t:'chips', label:'偏好的住宿', opts:['旅館','民宿','青旅','露營'], def:['民宿']},
     {k:'stayBudget', t:'range', label:'一晚預算', min:800, max:6000, step:200, def:2000, fmt:v=>`${v} 元內`},
     {k:'stayMood', t:'seg', label:'周邊環境', opts:['安靜','都可以','熱鬧'], def:'安靜'},
+    {k:'stayNote', t:'text', label:'住宿還有什麼要求？', ph:'例如：要能帶寵物', def:''},
   ]},
   {cat:'move', fields:[
     {k:'transport', t:'chips', label:'常用的交通方式', opts:['步行','腳踏車','機車','公車','捷運','開車'], def:['步行','腳踏車','捷運']},
     {k:'walkMax', t:'range', label:'可以接受走多久', min:5, max:30, step:5, def:15, fmt:v=>`${v} 分鐘內`},
+    {k:'moveNote', t:'text', label:'移動上還有什麼習慣？', ph:'例如：不想轉車、想避開人多的站', def:''},
   ]},
   {cat:'learn', fields:[
     {k:'topics', t:'chips', label:'感興趣的主題', opts:['書店','展覽','講座','圖書館','博物館','課程'], def:['書店','展覽']},
+    {k:'learnNote', t:'text', label:'還想學什麼？', ph:'例如：最近在研究攝影', def:''},
   ]},
   {cat:'fun', fields:[
     {k:'activity', t:'chips', label:'喜歡的活動', opts:['電影','桌遊','運動','公園','KTV','夜市'], def:['電影','桌遊']},
     {k:'place', t:'seg', label:'場所', opts:['室內','都可以','戶外'], def:'室內'},
     {k:'people', t:'seg', label:'和誰去', opts:['獨自','都可以','多人'], def:'多人'},
+    {k:'funNote', t:'text', label:'還想玩什麼？', ph:'例如：想找安靜一點的展覽', def:''},
   ]},
   {cat:'common', glyph:'通', title:'其他', color:'#E7DCC0', fields:[
     {k:'dislike', t:'text', label:'討厭的東西', ph:'例如：香菜、人擠人、要排很久的隊', def:''},
@@ -517,7 +523,7 @@ function locate(){
     navigator.geolocation.getCurrentPosition(
       p => res({lat:p.coords.latitude, lng:p.coords.longitude, mock:false}),
       () => res(fallback),
-      {timeout:6000, maximumAge:60000}
+      {enableHighAccuracy:true, timeout:12000, maximumAge:60000}
     );
   });
 }
@@ -536,23 +542,33 @@ function greetLine(){
 }
 
 
-async function apiPost_(payload){
-  const res = await fetch(CONFIG.API_URL, {
-    method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify(Object.assign({token:CONFIG.TOKEN}, payload))
-  });
-  const data = await res.json();
-  if(data && data.error) throw Object.assign(new Error(data.message || '發生錯誤'), {code:data.error});
-  return data;
+async function apiPost_(payload, ms=90000){
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), ms);
+  try{
+    const res = await fetch(CONFIG.API_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify(Object.assign({token:CONFIG.TOKEN}, payload)),
+      signal: ctrl.signal
+    });
+    const data = await res.json();
+    if(data && data.error) throw Object.assign(new Error(data.message || '發生錯誤'), {code:data.error});
+    return data;
+  }catch(e){
+    if(e.name === 'AbortError') throw Object.assign(new Error('卡皮想太久了，再試一次看看。'), {code:'timeout'});
+    throw e;
+  }finally{
+    clearTimeout(timer);
+  }
 }
 async function fetchState(){
   if(!CONFIG.API_URL) return null;
-  return apiPost_({action:'getState'});
+  return apiPost_({action:'getState'}, 30000);
 }
-async function fetchRecs(){
+async function fetchRecs(fresh){
   if(!CONFIG.API_URL){ await sleep(1300); return MOCK; }
   const ti = timeInfo();
-  return apiPost_({action:'recommend', lat:state.coords.lat, lng:state.coords.lng, time:ti.clock, prefs:state.prefs});
+  return apiPost_({action:'recommend', lat:state.coords.lat, lng:state.coords.lng, time:ti.clock, prefs:state.prefs, fresh:!!fresh});
 }
 function findRec(id){
   const recs = (state.data && state.data.recs) || {};
@@ -602,7 +618,9 @@ function cardHTML(it, cat){
   if(fb==='dislike'){
     return `<li><div class="card gone"><p>已避開「${esc(it.name)}」，之後會少推類似的。</p><button class="link" data-undo="${it.id}">復原</button></div></li>`;
   }
-  const q = encodeURIComponent(it.name);
+  const q = (typeof it.lat === 'number' && typeof it.lng === 'number')
+    ? `${it.lat},${it.lng}`
+    : encodeURIComponent(it.name);
   const state_ = t => `aria-pressed="${fb===t}"`;
   return `<li><article class="card" style="--acc:${cat.color}">
     ${fb==='been' ? '<span class="stamp">去過了</span>' : ''}
@@ -676,7 +694,7 @@ function errorMessage_(e){
   return '請確認網路，或稍後再試一次。';
 }
 
-async function boot(){
+async function boot(fresh){
   $('#tabs').hidden = true; $('#nudge').hidden = true;
   $('#panel').innerHTML = loaderHTML();
   say(['我先看看你在哪裡……','（我自己常常搞不清楚我在哪）']);
@@ -699,7 +717,7 @@ async function boot(){
   state.coords = await locate();
   say(['找到了！','我來翻翻你的偏好表。']);
   try{
-    state.data = await fetchRecs();
+    state.data = await fetchRecs(fresh);
   }catch(e){
     if(e.code === 'unauthorized') return handleUnauthorized(e.message);
     $('#panel').innerHTML = `<div class="empty"><div class="pic" role="img" aria-label="卡皮歪著頭，一臉困惑"></div><div class="txt"><h3>卡皮連不上伺服器</h3><p>${esc(errorMessage_(e))}</p><button class="btn" id="retry">再試一次</button></div></div>`;
@@ -788,7 +806,7 @@ document.addEventListener('click', e => {
   if(t.dataset.undo){ delete state.feedback[t.dataset.undo]; sendFeedback(t.dataset.undo,'clear'); renderPanel(); return; }
   if(t.id==='go-pref' || t.id==='nudge' || t.id==='nav-pref') return show('pref');
   if(t.id==='nav-home') return show('home');
-  if(t.id==='btn-relocate'){ show('home'); return boot(); }
+  if(t.id==='btn-relocate'){ show('home'); return boot(true); }
   if(t.id==='retry') return boot();
 });
 $('#tabs').addEventListener('keydown', e => {

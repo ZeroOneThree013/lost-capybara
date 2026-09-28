@@ -30,6 +30,11 @@ function buildAllowedBasis_(values, timePart, weather) {
   if (values.place && values.place !== '都可以') byCat.fun.push('場所：' + values.place);
   if (values.people && values.people !== '都可以') byCat.fun.push('人數：' + values.people);
 
+  Object.keys(byCat).forEach(function (cat) {
+    var note = values[cat + 'Note'];
+    if (note) byCat[cat].push('補充：' + note);
+  });
+
   return byCat;
 }
 
@@ -62,6 +67,8 @@ function validatePicks_(rawPicks, candidatesByCat, allowedBasisByCat, threshold)
         kind: cand.kind,
         walk: cand.walk,
         m: cand.m,
+        lat: cand.lat,
+        lng: cand.lng,
         score: p.score,
         reason: p.reason.trim(),
         basis: basis,

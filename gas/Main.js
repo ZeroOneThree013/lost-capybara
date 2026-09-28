@@ -51,7 +51,7 @@ function handleRecommend_(body) {
   if (typeof body.lat !== 'number' || typeof body.lng !== 'number') throw new Error('缺少座標');
 
   var weather = fetchWeather_(body.lat, body.lng);
-  var rawCandidates = fetchOverpassCandidates_(body.lat, body.lng, 1200);
+  var rawCandidates = fetchOverpassCandidates_(body.lat, body.lng, 1200, body.fresh);
   var feedbackMap = getFeedbackMap_();
   var lists = buildCandidateLists_(rawCandidates, { lat: body.lat, lng: body.lng }, {
     rain: weather.rain,

@@ -7,7 +7,7 @@ global.OSM_RULES_ = OSM_RULES_;
 global.haversineMeters_ = haversineMeters_;
 global.walkMinutes_ = walkMinutes_;
 
-const { buildOverpassQuery_, elementToCandidate_, buildCandidateLists_ } = require('../gas/Places.js');
+const { buildOverpassQuery_, elementToCandidate_, buildCandidateLists_, trimNearest_, orderedEndpoints_, OVERPASS_ENDPOINTS_ } = require("../gas/Places.js");
 
 function run() {
   const q = buildOverpassQuery_(25.03, 121.56, 1200);
@@ -65,6 +65,23 @@ function run() {
   const limited = buildCandidateLists_(candidates, origin, { rain: false, feedbackMap: {}, limit: 1 });
   assert.strictEqual(limited.food.length, 1);
   assert.strictEqual(limited.food[0].id, 'd');
+
+  const many = [];
+  for (let i = 0; i < 400; i++) {
+    many.push({ id: 'n' + i, name: '店' + i, cat: i % 2 ? 'food' : 'fun', outdoor: false, kind: '餐廳',
+      lat: 25.03 + i * 0.0004, lng: 121.56, hasOpeningHours: true });
+  }
+  const trimmed = trimNearest_(many, origin, 30);
+  assert.strictEqual(trimmed.length, 60, '每類最多留 30 筆');
+  assert.strictEqual(trimmed.filter(c => c.cat === 'food').length, 30);
+  assert.strictEqual(trimmed[0].id, 'n0', '要留最近的，不是隨便留');
+  assert.ok(trimmed.every(c => 'lat' in c && 'outdoor' in c), '裁切後仍要保留後續計算需要的欄位');
+  assert.ok(JSON.stringify(trimmed).length < 45000, '裁切後必須小於單格字元上限，快取才會生效');
+
+  const [first] = orderedEndpoints_(OVERPASS_ENDPOINTS_[2]);
+  assert.strictEqual(first, OVERPASS_ENDPOINTS_[2], '上次成功的伺服器要排到最前面');
+  assert.strictEqual(orderedEndpoints_(null).join(), OVERPASS_ENDPOINTS_.join(), '沒有偏好時維持原順序');
+  assert.strictEqual(orderedEndpoints_('https://unknown/').length, OVERPASS_ENDPOINTS_.length);
 
   console.log('places.test.js OK');
 }

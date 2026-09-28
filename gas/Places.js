@@ -12,7 +12,7 @@ function buildOverpassQuery_(lat, lng, radius) {
     parts.push('node' + filter + '(' + around + ');');
     parts.push('way' + filter + '(' + around + ');');
   });
-  return '[out:json][timeout:25];(' + parts.join('') + ');out center;';
+  return '[out:json][timeout:15];(' + parts.join('') + ');out center;';
 }
 
 function elementToCandidate_(el) {
@@ -55,6 +55,8 @@ function buildCandidateLists_(candidates, origin, opts) {
       kind: c.kind,
       m: m,
       walk: walkMinutes_(m),
+      lat: c.lat,
+      lng: c.lng,
       hasOpeningHours: c.hasOpeningHours,
     });
   });
@@ -72,11 +74,38 @@ var OVERPASS_ENDPOINTS_ = [
   'https://overpass.private.coffee/api/interpreter',
 ];
 
+function orderedEndpoints_(preferred) {
+  var list = OVERPASS_ENDPOINTS_.slice();
+  var at = list.indexOf(preferred);
+  if (at > 0) {
+    list.splice(at, 1);
+    list.unshift(preferred);
+  }
+  return list;
+}
+
+function trimNearest_(candidates, origin, perCat) {
+  var byCat = {};
+  candidates.forEach(function (c) {
+    if (!byCat[c.cat]) byCat[c.cat] = [];
+    byCat[c.cat].push({ d: haversineMeters_(origin.lat, origin.lng, c.lat, c.lng), c: c });
+  });
+
+  var out = [];
+  Object.keys(byCat).forEach(function (cat) {
+    byCat[cat].sort(function (a, b) { return a.d - b.d; });
+    byCat[cat].slice(0, perCat).forEach(function (x) { out.push(x.c); });
+  });
+  return out;
+}
+
 function fetchOverpassJson_(query) {
   var lastProblem = '沒有可用的伺服器';
+  var preferred = getCache_('overpass:endpoint');
+  var endpoints = orderedEndpoints_(preferred);
 
-  for (var i = 0; i < OVERPASS_ENDPOINTS_.length; i++) {
-    var endpoint = OVERPASS_ENDPOINTS_[i];
+  for (var i = 0; i < endpoints.length; i++) {
+    var endpoint = endpoints[i];
     var text;
     try {
       var resp = UrlFetchApp.fetch(endpoint, {
@@ -112,19 +141,23 @@ function fetchOverpassJson_(query) {
       lastProblem = endpoint + ' 回報：' + json.remark;
       continue;
     }
+    if (endpoint !== preferred) setCache_('overpass:endpoint', endpoint, 24 * 60 * 60 * 1000);
     return json;
   }
 
   throw new Error('Overpass 全部失敗，最後一個問題：' + lastProblem);
 }
 
-function fetchOverpassCandidates_(lat, lng, radius) {
+function fetchOverpassCandidates_(lat, lng, radius, fresh) {
   var key = 'places:' + lat.toFixed(3) + ',' + lng.toFixed(3) + ':' + radius;
-  var cached = getCache_(key);
-  if (cached) return cached;
+  if (!fresh) {
+    var cached = getCache_(key);
+    if (cached) return cached;
+  }
 
   var json = fetchOverpassJson_(buildOverpassQuery_(lat, lng, radius));
-  var candidates = (json.elements || []).map(elementToCandidate_).filter(Boolean);
+  var all = (json.elements || []).map(elementToCandidate_).filter(Boolean);
+  var candidates = trimNearest_(all, { lat: lat, lng: lng }, 30);
   setCache_(key, candidates, 12 * 60 * 60 * 1000);
   return candidates;
 }
@@ -134,5 +167,8 @@ if (typeof module !== 'undefined' && module.exports) {
     buildOverpassQuery_: buildOverpassQuery_,
     elementToCandidate_: elementToCandidate_,
     buildCandidateLists_: buildCandidateLists_,
+    trimNearest_: trimNearest_,
+    orderedEndpoints_: orderedEndpoints_,
+    OVERPASS_ENDPOINTS_: OVERPASS_ENDPOINTS_,
   };
 }

@@ -30,6 +30,15 @@ function run() {
   assert.ok(basis.cloth.includes('時段：晚上'), '共通依據應套用到所有類別');
   assert.strictEqual(basis.cloth.filter(b => b.startsWith('口味：')).length, 0);
 
+  const withNotes = buildAllowedBasis_(
+    { foodNote: '想找有插座可以久坐的', funNote: '' },
+    '下午',
+    { text: '晴天', rain: false }
+  );
+  assert.ok(withNotes.food.includes('補充：想找有插座可以久坐的'), '各類的自由文字要能當成依據');
+  assert.ok(!withNotes.fun.some(b => b.startsWith('補充：')), '沒填的自由文字不應變成依據');
+  assert.ok(!withNotes.cloth.some(b => b.startsWith('補充：')), '自由文字只屬於自己那一類');
+
   // --- validatePicks_ ---
   const candidatesByCat = {
     food: [
