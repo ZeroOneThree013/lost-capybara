@@ -379,6 +379,7 @@ svg.i{display:block}
             <p>每個月重填一次，卡皮只會照這份表單挑地方，不會亂猜。</p>
           </div>
           <div class="status" id="pref-status" role="status"></div>
+          <button class="link" id="mode-switch"></button>
           <div class="pref-pic" role="img" aria-label="卡皮揹著背包，開心地準備出發"></div>
         </div>
         <form id="pref-form" autocomplete="off"></form>
@@ -703,6 +704,7 @@ function showGate(errorText){
   $('#gate-token').focus();
 }
 function goDemo(){ location.replace(location.pathname + '?demo=1'); }
+function goReal(){ location.replace(location.pathname); }
 function hideGate(){ $('#gate').hidden = true; }
 
 function handleUnauthorized(message){
@@ -830,6 +832,7 @@ document.addEventListener('click', e => {
   if(t.id==='nav-home') return show('home');
   if(t.id==='pick-owner') return showGate();
   if(t.id==='pick-demo' || t.id==='pick-demo-alt') return goDemo();
+  if(t.id==='mode-switch') return CONFIG.API_URL ? goDemo() : goReal();
   if(t.id==='btn-relocate'){ show('home'); return boot(true); }
   if(t.id==='retry') return boot();
 });
@@ -871,6 +874,8 @@ if(params.get('demo')){
   }
   CONFIG.TOKEN = getStoredToken();
 }
+$('#mode-switch').textContent = CONFIG.API_URL ? '切換到展示模式' : '我是本人，切換回真實推薦';
+
 if(CONFIG.API_URL && !CONFIG.TOKEN){
   showPicker();
 }else{
